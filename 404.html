@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wedding Table Games</title>
+<style>
+body { margin:0; background:#1b1f2a; color:#f4f5f8; font-family:"Nunito Sans","Segoe UI",Helvetica,Arial,sans-serif; padding:32px 16px; display:flex; flex-direction:column; align-items:center; gap:14px; text-align:center; }
+h1 { font-size:1.6rem; margin:0; } p { margin:0; color:#9aa3b8; max-width:40ch; }
+a { display:block; width:100%; max-width:360px; padding:16px; border-radius:14px; background:#f2c14e; color:#1b1f2a; font-weight:800; text-decoration:none; font-size:1.1rem; }
+a.alt { background:#303646; color:#f4f5f8; }
+</style>
+<script>
+(function () {
+  // Case or typo in the address? Send it where it meant to go.
+  var p = location.pathname.toLowerCase();
+  var base = "/wedding-games/";
+  var dest = null;
+  if (/uno/.test(p)) dest = base + "uno/";
+  else if (/connect|four|c4/.test(p)) dest = base + "connect4/";
+  else if (/map|know/.test(p)) dest = base + "map/";
+  else if (p !== location.pathname) dest = base;
+  if (dest && dest !== location.pathname) location.replace(dest + location.hash);
+})();
+</script>
+</head>
+<body>
+<h1>That link isn't quite right</h1>
+<p>Pick what you were looking for:</p>
+<a href="/wedding-games/uno/">Uno over a link</a>
+<a href="/wedding-games/connect4/" class="alt">Connect Four over a link</a>
+<a href="/wedding-games/map/" class="alt">How do you know them? map</a>
+</body>
+</html>
