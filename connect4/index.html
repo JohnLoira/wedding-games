@@ -369,7 +369,7 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; 
   // Live stream over SSE, plus a sparse poll as a safety net: a stream can die
   // quietly (a throttled reconnect, a dropped connection) and a turn-based game
   // can't afford a phone that silently stops hearing moves.
-  let lastEventAt = 0, retryMs = 2000, pollTimer = null, watchTimer = null, reconnectTimer = null, polling = false;
+  let lastEventAt = 0, retryMs = 15000, pollTimer = null, watchTimer = null, reconnectTimer = null, polling = false;
   function handleEnvelope(env) {
     lastEventAt = Date.now();
     if (!env || env.event !== "message") return;
@@ -377,9 +377,10 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; 
     ingest(Object.assign({ id: env.id, time: env.time }, body));
   }
   function openStream() {
+    if (Date.now() < throttledUntil) { clearTimeout(reconnectTimer); reconnectTimer = setTimeout(openStream, throttledUntil - Date.now() + 500); return; }
     if (es) { es.onerror = null; es.close(); }
     es = new EventSource(RELAY + "/" + topic + "/sse?since=all");
-    es.onopen = () => { connected = true; everConnected = true; retryMs = 2000; lastEventAt = Date.now(); clearTimeout(offlineTimer); setConn("live", "Live"); setTimeout(poll, 1500); };
+    es.onopen = () => { connected = true; everConnected = true; retryMs = 15000; lastEventAt = Date.now(); clearTimeout(offlineTimer); setConn("live", "Live"); setTimeout(poll, 1500); };
     es.onmessage = m => { let env; try { env = JSON.parse(m.data); } catch { return; } handleEnvelope(env); };
     es.onerror = () => {
       connected = false; setConn("reconnecting", everConnected ? "Reconnecting…" : "Connecting…");
@@ -388,15 +389,19 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; 
       if (es && es.readyState === 2) {            // browser gave up (non-200 reply); retry ourselves
         clearTimeout(reconnectTimer);
         reconnectTimer = setTimeout(() => { if (mode === "online") openStream(); }, retryMs);
-        retryMs = Math.min(retryMs * 2, 30000);
+        retryMs = Math.min(retryMs * 2, 120000);
       }
     };
   }
+  let throttledUntil = 0;
+  function streamHealthy() { return !!es && es.readyState === 1 && Date.now() - lastEventAt < 60000; }
   async function poll() {
+    if (Date.now() < throttledUntil) return;
     if (mode !== "online" || !topic || polling) return;
     polling = true;
     try {
       const r = await fetch(RELAY + "/" + topic + "/json?poll=1&since=all", { cache: "no-store" });
+      if (r.status === 429) { throttledUntil = Date.now() + 30000; setConn("reconnecting", "Relay busy…"); return; }
       if (!r.ok) throw new Error("HTTP " + r.status);
       const text = await r.text();
       const before = log.length;
@@ -409,7 +414,7 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; 
     log = []; seen = new Set(); state = C4.replay([]); clearPending();
     setConn("connecting", "Connecting…");
     openStream();
-    clearInterval(pollTimer); pollTimer = setInterval(poll, 12000);
+    clearInterval(pollTimer); pollTimer = setInterval(() => { if (!streamHealthy()) poll(); }, 30000);
     clearInterval(watchTimer); watchTimer = setInterval(() => {
       if (mode !== "online") return;
       if (Date.now() - lastEventAt > 90000) openStream();                   // no keepalive for a while: stream is dead
@@ -423,14 +428,15 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; 
   async function publish(body) {
     try {
       const r = await fetch(RELAY + "/" + topic, { method: "POST", body: JSON.stringify(body) });
+      if (r.status === 429) { throttledUntil = Date.now() + 15000; const e = new Error("busy"); e.throttled = true; throw e; }
       if (!r.ok) throw new Error("HTTP " + r.status);
       setTimeout(() => { if (pending) poll(); }, 2500);                    // no echo yet? ask directly
       return true;
-    } catch (e) { toast("Couldn't send. Check your signal."); return false; }
+    } catch (e) { toast(e && e.throttled ? "The relay is busy. Wait a few seconds and try again." : "Couldn't send. Check your signal.", 3500); return false; }
   }
   function hello() {
     const name = currentName(); if (name) store.set("c4:name", name);
-    publish({ t: "hello", pid, name }).then(() => setTimeout(poll, 1200));   // a hello sent while the stream is still connecting can fall between replay and live
+    publish({ t: "hello", pid, name });   // the poll scheduled when the stream opens covers a hello that lands between replay and live
   }
 
   // ---------- actions ----------

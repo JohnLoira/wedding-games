@@ -293,15 +293,15 @@ footer a { color: inherit; }
       scheduleRender();
     } catch {}
   }
-  let es = null, lastEventAt = 0, retryMs = 2000;
+  let es = null, lastEventAt = 0, retryMs = 15000;
   function setLive(on) { $("status").dataset.live = on ? "1" : "0"; $("status").textContent = on ? "live" : "reconnecting"; }
   function openStream() {
     if (!TOPIC) return;
     if (es) { es.onerror = null; es.close(); }
     es = new EventSource(RELAY + "/" + TOPIC + "/sse?since=all");
-    es.onopen = () => { retryMs = 2000; lastEventAt = Date.now(); setLive(true); setTimeout(poll, 1500); };
+    es.onopen = () => { retryMs = 15000; lastEventAt = Date.now(); setLive(true); setTimeout(poll, 1500); };
     es.onmessage = m => { lastEventAt = Date.now(); let env; try { env = JSON.parse(m.data); } catch { return; } handleEnvelope(env); };
-    es.onerror = () => { setLive(false); if (es && es.readyState === 2) { setTimeout(openStream, retryMs); retryMs = Math.min(retryMs * 2, 30000); } };
+    es.onerror = () => { setLive(false); if (es && es.readyState === 2) { setTimeout(openStream, retryMs); retryMs = Math.min(retryMs * 2, 120000); } };
   }
   let polling = false;
   async function poll() {
@@ -312,11 +312,12 @@ footer a { color: inherit; }
       for (const line of (await r.text()).split("\n")) { if (!line.trim()) continue; let env; try { env = JSON.parse(line); } catch { continue; } handleEnvelope(env); }
     } catch {} finally { polling = false; }
   }
-  setInterval(poll, 45000);
+  setInterval(() => { if (!(es && es.readyState === 1 && Date.now() - lastEventAt > 60000)) return; poll(); }, 60000);
   setInterval(() => { if (es && (es.readyState === 2 || Date.now() - lastEventAt > 90000)) openStream(); }, 20000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { poll(); if (es && es.readyState === 2) openStream(); } });
   async function publish(body) {
     const r = await fetch(RELAY + "/" + TOPIC, { method: "POST", body: JSON.stringify(body) });
+    if (r.status === 429) throw new Error("busy");
     if (!r.ok) throw new Error("HTTP " + r.status);
   }
 
@@ -396,7 +397,7 @@ footer a { color: inherit; }
       applyPin(pin); render(); resetForm();
       map.flyTo(jitter(pin), Math.max(map.getZoom(), 5), { duration: 0.8 });
       toast("You're on the map 🎉");
-    } catch { toast("Couldn't save. Check your signal and try again.", 3500); }
+    } catch (e) { toast(e && e.message === "busy" ? "The relay is busy. Wait a few seconds and try again." : "Couldn't save. Check your signal and try again.", 3500); }
     finally { $("btn-save").disabled = false; }
   });
   async function removeMine(id) {

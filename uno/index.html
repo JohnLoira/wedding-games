@@ -403,23 +403,28 @@ footer { margin-top: 8px; font-size: 0.8rem; color: var(--muted); display: flex;
   }
 
   // ---------- relay (same shape as Connect Four) ----------
-  let connected = false, everConnected = false, offlineTimer = null, lastEventAt = 0, retryMs = 2000, pollTimer = null, watchTimer = null, reconnectTimer = null, polling = false;
+  let connected = false, everConnected = false, offlineTimer = null, lastEventAt = 0, retryMs = 15000, pollTimer = null, watchTimer = null, reconnectTimer = null, polling = false;
   function handleEnvelope(env) { lastEventAt = Date.now(); if (!env || env.event !== "message") return; let body; try { body = JSON.parse(env.message); } catch { return; } ingest(Object.assign({ id: env.id, time: env.time }, body)); }
   function openStream() {
+    if (Date.now() < throttledUntil) { clearTimeout(reconnectTimer); reconnectTimer = setTimeout(openStream, throttledUntil - Date.now() + 500); return; }
     if (es) { es.onerror = null; es.close(); }
     es = new EventSource(RELAY + "/" + topic + "/sse?since=all");
-    es.onopen = () => { connected = true; everConnected = true; retryMs = 2000; lastEventAt = Date.now(); clearTimeout(offlineTimer); setConn("live", "Live"); setTimeout(poll, 1500); };
+    es.onopen = () => { connected = true; everConnected = true; retryMs = 15000; lastEventAt = Date.now(); clearTimeout(offlineTimer); setConn("live", "Live"); setTimeout(poll, 1500); };
     es.onmessage = m => { let env; try { env = JSON.parse(m.data); } catch { return; } handleEnvelope(env); };
     es.onerror = () => {
       connected = false; setConn("reconnecting", everConnected ? "Reconnecting…" : "Connecting…");
       clearTimeout(offlineTimer); offlineTimer = setTimeout(() => { if (!connected) { setConn("offline", "Offline"); toast("Can't reach the relay. Trying again…", 3000); } }, 10000);
-      if (es && es.readyState === 2) { clearTimeout(reconnectTimer); reconnectTimer = setTimeout(() => { if (mode === "online") openStream(); }, retryMs); retryMs = Math.min(retryMs * 2, 30000); }
+      if (es && es.readyState === 2) { clearTimeout(reconnectTimer); reconnectTimer = setTimeout(() => { if (mode === "online") openStream(); }, retryMs); retryMs = Math.min(retryMs * 2, 120000); }
     };
   }
+  let throttledUntil = 0;
+  function streamHealthy() { return !!es && es.readyState === 1 && Date.now() - lastEventAt < 60000; }
   async function poll() {
+    if (Date.now() < throttledUntil) return;
     if (mode !== "online" || !topic || polling) return; polling = true;
     try {
       const r = await fetch(RELAY + "/" + topic + "/json?poll=1&since=all", { cache: "no-store" });
+      if (r.status === 429) { throttledUntil = Date.now() + 30000; setConn("reconnecting", "Relay busy…"); return; }
       if (!r.ok) throw 0;
       const before = log.length;
       for (const line of (await r.text()).split("\n")) { if (!line.trim()) continue; let env; try { env = JSON.parse(line); } catch { continue; } handleEnvelope(env); }
@@ -429,15 +434,19 @@ footer { margin-top: 8px; font-size: 0.8rem; color: var(--muted); display: flex;
   function connect(code) {
     room = code; topic = PREFIX + code.toLowerCase(); log = []; seen = new Set(); state = UNO.replay([]); busy = false;
     setConn("connecting", "Connecting…"); openStream();
-    clearInterval(pollTimer); pollTimer = setInterval(poll, 12000);
+    clearInterval(pollTimer); pollTimer = setInterval(() => { if (!streamHealthy()) poll(); }, 30000);
     clearInterval(watchTimer); watchTimer = setInterval(() => { if (mode !== "online") return; if (Date.now() - lastEventAt > 90000 || (es && es.readyState === 2)) openStream(); }, 15000);
   }
   function disconnect() { if (es) { es.onerror = null; es.close(); es = null; } clearInterval(pollTimer); clearInterval(watchTimer); clearTimeout(reconnectTimer); clearTimeout(offlineTimer); }
   async function publish(body) {
-    try { const r = await fetch(RELAY + "/" + topic, { method: "POST", body: JSON.stringify(body) }); if (!r.ok) throw new Error("HTTP " + r.status); setTimeout(() => { if (busy) poll(); }, 2500); return true; }
-    catch { busy = false; render(); toast("Couldn't send. Check your signal."); return false; }
+    try {
+      const r = await fetch(RELAY + "/" + topic, { method: "POST", body: JSON.stringify(body) });
+      if (r.status === 429) { throttledUntil = Date.now() + 15000; const e = new Error("busy"); e.throttled = true; throw e; }
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      setTimeout(() => { if (busy) poll(); }, 2500); return true;
+    } catch (e) { busy = false; render(); toast(e && e.throttled ? "The relay is busy. Wait a few seconds and try again." : "Couldn't send. Check your signal.", 3500); return false; }
   }
-  function hello() { const name = ($("name-join").value || $("name-lobby").value).trim().slice(0, 18); if (name) store.set("uno:name", name); publish({ t: "hello", pid, name }).then(() => setTimeout(poll, 1200)); }
+  function hello() { const name = ($("name-join").value || $("name-lobby").value).trim().slice(0, 18); if (name) store.set("uno:name", name); publish({ t: "hello", pid, name }); }
 
   // ---------- modes ----------
   function startOnline(code, isCreator) {
