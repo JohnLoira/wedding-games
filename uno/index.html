@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Uno Over a Link</title>
+<meta name="description" content="Uno for two to six phones. Open the link, join the table, play from your own hand.">
+<meta property="og:title" content="Uno over a link">
+<meta property="og:description" content="You're invited to a table. Tap to join from your phone.">
+<meta name="theme-color" content="#1b1f2a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+/* Layout: one-screen table. Opponents on top, piles in the middle, your hand pinned at the bottom. */
+:root {
+  --bg: #1b1f2a; --surface: #262b38; --surface-2: #303646; --ink: #f4f5f8; --muted: #9aa3b8; --line: #3a4154;
+  --accent: #f2c14e; --accent-ink: #1b1f2a; --good: #4cc38a; --danger: #ef5a5a;
+  --red: #e3342f; --green: #27a745; --blue: #2d6cdf; --yellow: #f5c518; --wild: #2a2e3a;
+  --display: "Lilita One", "Arial Rounded MT Bold", sans-serif; --body: "Nunito Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.4; padding-inline: 12px; padding-block: calc(env(safe-area-inset-top, 0px) + 10px) calc(env(safe-area-inset-bottom, 0px) + 12px); display: flex; flex-direction: column; align-items: center; -webkit-tap-highlight-color: transparent; }
+h1, h2 { font-family: var(--display); font-weight: 400; margin: 0; letter-spacing: 0.01em; }
+h1 { font-size: 1.9rem; line-height: 1; }
+.eyebrow { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); font-weight: 800; }
+header { width: 100%; max-width: 520px; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.pill { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pill[data-state="live"] { color: var(--good); } .pill[data-state="live"]::before { background: var(--good); }
+.pill[data-state="connecting"], .pill[data-state="reconnecting"] { color: var(--accent); } .pill[data-state="connecting"]::before, .pill[data-state="reconnecting"]::before { background: var(--accent); animation: blink 1s infinite; }
+.pill[data-state="offline"] { color: var(--danger); } .pill[data-state="offline"]::before { background: var(--danger); }
+@keyframes blink { 50% { opacity: 0.25; } }
+.screen { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 12px; }
+.card-ui { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.card-ui p { margin: 0; color: var(--muted); }
+label { font-weight: 700; font-size: 0.88rem; display: flex; flex-direction: column; gap: 6px; }
+input[type="text"] { font: inherit; font-size: 1.05rem; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+input:focus { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent); }
+button { font: inherit; font-weight: 800; font-size: 1rem; cursor: pointer; padding: 13px 18px; border-radius: 14px; border: 0; background: var(--accent); color: var(--accent-ink); display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 2px; }
+button.secondary { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); }
+button.small { font-size: 0.85rem; padding: 8px 12px; border-radius: 10px; }
+button.link { background: none; color: var(--muted); padding: 6px 8px; font-weight: 600; text-decoration: underline; }
+button:disabled { opacity: 0.45; cursor: default; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; } .row > * { flex: 1 1 120px; }
+.counts { display: flex; gap: 8px; } .counts button { flex: 1; padding: 12px 0; }
+.counts button[aria-pressed="true"] { outline: 3px solid var(--accent); }
+
+/* table */
+.table { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
+.opps { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.opps::-webkit-scrollbar { display: none; }
+.opp { flex: 0 0 auto; min-width: 92px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; position: relative; }
+.opp.turn { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
+.opp.out { opacity: 0.55; }
+.opp .name { font-weight: 800; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+.opp .n { font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.opp .fan { display: inline-flex; gap: 1px; } .opp .fan i { width: 6px; height: 10px; background: var(--muted); border-radius: 1px; display: inline-block; }
+.opp .badge { position: absolute; top: -8px; right: -6px; background: var(--danger); color: #fff; font-family: var(--display); font-size: 0.75rem; padding: 2px 7px; border-radius: 999px; transform: rotate(8deg); }
+.opp button { margin-top: 2px; padding: 6px 8px; font-size: 0.8rem; border-radius: 8px; background: var(--danger); color: #fff; }
+.center { display: grid; grid-template-columns: 1fr auto auto 1fr; align-items: center; gap: 14px; padding: 10px 0; }
+.center .pile { grid-column: 2; } .center .draw { grid-column: 3; }
+.center .dirwrap { grid-column: 1; justify-self: end; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); font-size: 0.75rem; font-weight: 700; }
+.center .dirwrap .arrow { font-size: 1.6rem; line-height: 1; }
+.center .colorwrap { grid-column: 4; justify-self: start; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); font-size: 0.75rem; font-weight: 700; }
+.swatch { width: 28px; height: 28px; border-radius: 50%; border: 3px solid #fff2; background: conic-gradient(var(--red) 0 25%, var(--yellow) 0 50%, var(--green) 0 75%, var(--blue) 0); }
+.swatch.r { background: var(--red); } .swatch.g { background: var(--green); } .swatch.b { background: var(--blue); } .swatch.y { background: var(--yellow); }
+.status { text-align: center; font-weight: 800; font-size: 1.05rem; min-height: 1.5em; }
+.status.mine { color: var(--accent); }
+.feed { text-align: center; color: var(--muted); font-size: 0.85rem; min-height: 1.3em; }
+
+/* cards */
+.card { position: relative; width: 64px; height: 96px; border-radius: 9px; background: var(--wild); color: #fff; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; font-family: var(--display); font-size: 2rem; flex: none; user-select: none; }
+.card.r { background: var(--red); } .card.g { background: var(--green); } .card.b { background: var(--blue); } .card.y { background: var(--yellow); color: #2a2200; }
+.card.w { background: conic-gradient(var(--red) 0 25%, var(--yellow) 0 50%, var(--green) 0 75%, var(--blue) 0); }
+.card.w .v { background: #1b1f2a; color: #fff; border-radius: 999px; padding: 2px 10px; font-size: 1.3rem; }
+.card .c { position: absolute; top: 4px; left: 6px; font-size: 0.8rem; } .card .c2 { position: absolute; bottom: 4px; right: 6px; font-size: 0.8rem; transform: rotate(180deg); }
+.card.big { width: 96px; height: 144px; font-size: 3rem; border-width: 4px; border-radius: 12px; } .card.big .c, .card.big .c2 { font-size: 1.1rem; }
+.card.back { background: repeating-linear-gradient(135deg, #b8102a 0 8px, #8e0b20 8px 16px); color: var(--accent); font-size: 1.5rem; }
+.card.back::after { content: "UNO"; transform: rotate(-20deg); }
+.draw { cursor: pointer; } .draw.can { animation: pulse 1.2s infinite; } .draw .count { position: absolute; bottom: -18px; left: 0; right: 0; text-align: center; font-size: 0.7rem; color: var(--muted); font-family: var(--body); font-weight: 700; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 4px rgba(242,193,78,0.55), 0 8px 18px rgba(242,193,78,0.35); } }
+.hand-wrap { margin-top: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 10px 10px 8px; display: flex; flex-direction: column; gap: 8px; }
+.hand-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hand-head .me { font-weight: 800; } .hand-head .me small { color: var(--muted); font-weight: 600; }
+.hand { display: flex; gap: 6px; overflow-x: auto; padding: 10px 4px 6px; min-height: 112px; scrollbar-width: thin; }
+.hand .card { cursor: pointer; transition: transform 0.15s; opacity: 0.55; }
+.hand .card.can { opacity: 1; transform: translateY(-8px); box-shadow: 0 6px 16px rgba(0,0,0,0.5), 0 0 0 2px var(--accent); }
+.hand .card.can:active { transform: translateY(-14px); }
+.hand.curtained .card { filter: blur(6px); pointer-events: none; }
+.actions { display: flex; gap: 8px; }
+.actions button { flex: 1; }
+.uno-btn { background: var(--danger); color: #fff; }
+.sheet { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 30; padding: 12px; }
+.sheet .inner { width: 100%; max-width: 520px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.colors { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.colors button { height: 80px; font-family: var(--display); font-size: 1.3rem; color: #fff; border-radius: 14px; }
+.colors .r { background: var(--red); } .colors .g { background: var(--green); } .colors .b { background: var(--blue); } .colors .y { background: var(--yellow); color: #2a2200; }
+.scores { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.scores li { display: flex; justify-content: space-between; padding: 8px 10px; background: var(--surface-2); border-radius: 10px; font-variant-numeric: tabular-nums; }
+.scores li.win { outline: 2px solid var(--accent); }
+.curtain { position: absolute; inset: 0; background: var(--surface); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; z-index: 5; }
+.share { align-items: center; text-align: center; }
+.share .qr { background: #fff; padding: 10px; border-radius: 12px; display: inline-block; line-height: 0; } .share .qr img, .share .qr canvas { display: block; }
+.linkbox { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; color: var(--muted); word-break: break-all; background: var(--bg); border-radius: 10px; padding: 10px 12px; width: 100%; user-select: all; }
+.code { font-family: var(--display); font-size: 2rem; letter-spacing: 0.18em; color: var(--accent); }
+.seats { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.seats li { background: var(--surface-2); border-radius: 999px; padding: 6px 12px; font-weight: 700; font-size: 0.9rem; } .seats li small { color: var(--muted); font-weight: 600; }
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 140px); transform: translateX(-50%); background: var(--accent); color: var(--accent-ink); padding: 10px 16px; border-radius: 999px; font-weight: 800; font-size: 0.9rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 40; max-width: calc(100vw - 32px); text-align: center; }
+.toast.show { opacity: 1; }
+footer { margin-top: 8px; font-size: 0.8rem; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+@media (prefers-reduced-motion: reduce) { .draw.can, .pill::before { animation: none; } }
+</style>
+</head>
+<body>
+<header>
+  <div><div class="eyebrow">Over a link</div><h1>Uno</h1></div>
+  <div style="display:flex;gap:8px;align-items:center"><span class="code" id="hdr-code" style="font-size:1.1rem;letter-spacing:.1em"></span><span class="pill" id="conn" data-state="idle">Lobby</span></div>
+</header>
+
+<section class="screen" id="screen-lobby">
+  <div class="card-ui">
+    <h2>Deal in up to six phones</h2>
+    <p>Start a table, show the QR code, everyone joins from their own phone. Hands stay private. First to empty their hand wins the round.</p>
+    <label>Your name <input type="text" id="name-lobby" maxlength="18" placeholder="Optional" autocomplete="given-name"></label>
+    <button id="btn-new">New table over a link</button>
+  </div>
+  <div class="card-ui">
+    <h2>Or pass one phone around</h2>
+    <p>How many players?</p>
+    <div class="counts" id="counts"></div>
+    <button class="secondary" id="btn-local">Pass and play</button>
+  </div>
+</section>
+
+<section class="screen" id="screen-join" hidden>
+  <div class="card-ui">
+    <div class="eyebrow">You've been dealt in</div>
+    <h2>Join table <span class="code" id="join-code"></span></h2>
+    <p>Up to six players. If the round is already going you'll be dealt in next round.</p>
+    <label>Your name <input type="text" id="name-join" maxlength="18" placeholder="Optional" autocomplete="given-name"></label>
+    <button id="btn-join">Join the table</button>
+    <button class="link" id="btn-join-home">Start my own table instead</button>
+  </div>
+</section>
+
+<section class="table" id="screen-table" hidden>
+  <div class="opps" id="opps"></div>
+  <div class="center">
+    <div class="dirwrap"><span class="arrow" id="dir">↻</span><span id="dir-label">clockwise</span></div>
+    <div class="pile" id="pile"></div>
+    <div class="card back draw" id="draw" role="button" aria-label="Draw a card"><span class="count" id="deck-count"></span></div>
+    <div class="colorwrap"><span class="swatch" id="swatch"></span><span id="color-label">color</span></div>
+  </div>
+  <div class="status" id="status"></div>
+  <div class="feed" id="feed"></div>
+
+  <div class="card-ui" id="waiting" hidden>
+    <div class="eyebrow">At the table</div>
+    <ul class="seats" id="seats"></ul>
+    <button id="btn-deal" hidden>Deal the cards</button>
+    <p id="wait-note"></p>
+  </div>
+
+  <div class="card-ui share" id="share" hidden>
+    <div class="eyebrow">Invite players</div>
+    <div class="code" id="share-code"></div>
+    <div class="qr" id="qr"></div>
+    <div class="linkbox" id="share-link"></div>
+    <div class="row" style="width:100%"><button class="small" id="btn-share">Share link</button><button class="secondary small" id="btn-copy">Copy link</button></div>
+  </div>
+
+  <div class="hand-wrap" id="hand-wrap" style="position:relative" hidden>
+    <div class="curtain" id="curtain" hidden><div class="eyebrow">Pass the phone</div><h2 id="curtain-name"></h2><p style="margin:0;color:var(--muted)">Tap when it's in your hands</p></div>
+    <div class="hand-head"><span class="me" id="me-label"></span><span id="hand-count" style="color:var(--muted);font-size:.85rem"></span></div>
+    <div class="hand" id="hand"></div>
+    <div class="actions">
+      <button class="uno-btn" id="btn-uno" hidden>UNO!</button>
+      <button class="secondary" id="btn-pass" hidden>Keep it, pass</button>
+    </div>
+  </div>
+  <footer>
+    <button class="link" id="btn-invite" hidden>Invite link</button>
+    <button class="link" id="btn-leave">Leave table</button>
+  </footer>
+</section>
+
+<div class="sheet" id="color-sheet" hidden>
+  <div class="inner">
+    <h2>Pick a color</h2>
+    <div class="colors"><button class="r" data-color="r">Red</button><button class="g" data-color="g">Green</button><button class="b" data-color="b">Blue</button><button class="y" data-color="y">Yellow</button></div>
+    <button class="link" id="btn-color-cancel">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="over-sheet" hidden>
+  <div class="inner">
+    <div class="eyebrow">Round over</div>
+    <h2 id="over-title"></h2>
+    <ul class="scores" id="scores"></ul>
+    <button id="btn-next" hidden>Deal the next round</button>
+    <p id="over-note" style="margin:0;color:var(--muted)"></p>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="game.js"></script>
+<script>
+(function () {
+  const RELAY = "https://ntfy.sh", PREFIX = "unow-", ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const $ = id => document.getElementById(id);
+  const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+  const pid = store.get("uno:pid") || (() => { const p = "p" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); store.set("uno:pid", p); return p; })();
+  $("name-lobby").value = store.get("uno:name", ""); $("name-join").value = store.get("uno:name", "");
+  const COLOR_NAME = { r: "Red", g: "Green", b: "Blue", y: "Yellow" };
+  const VALUE_LABEL = { skip: "⊘", rev: "⇄", d2: "+2", wild: "W", wd4: "+4" };
+  const VALUE_NAME = { skip: "Skip", rev: "Reverse", d2: "Draw Two", wild: "Wild", wd4: "Wild Draw Four" };
+
+  let mode = "lobby", room = null, topic = null, es = null, log = [], seen = new Set(), state = UNO.replay([]);
+  let busy = false, busyTimer = null, pendingWild = null, shareOpen = false, localCount = 3, curtainShown = false, curtainFor = null, lastSeenMoves = -1, lastRound = -1;
+
+  function toast(msg, ms = 2200) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), ms); }
+  function setConn(s, label) { $("conn").dataset.state = s; $("conn").textContent = label; }
+  function show(screen) { for (const s of ["lobby", "join", "table"]) $("screen-" + s).hidden = s !== screen; }
+  function roomCode() { let s = ""; for (let i = 0; i < 5; i++) s += ALPHABET[Math.floor(Math.random() * ALPHABET.length)]; return s; }
+  function roomLink(code) { return location.origin + location.pathname + "#" + code; }
+  function nameOf(p) { return state.names[p] || (mode === "local" ? "Player " + (state.seats.indexOf(p) + 1) : "Player " + (state.seats.indexOf(p) + 1)); }
+  function cardName(id) { const c = UNO.CARDS[id]; return c.color === "w" ? VALUE_NAME[c.value] : COLOR_NAME[c.color] + " " + (VALUE_NAME[c.value] || c.value); }
+  function myPid() { return mode === "local" ? state.players[state.current] || state.seats[0] : pid; }
+
+  // ---------- cards ----------
+  function cardEl(id, big) {
+    const c = UNO.CARDS[id];
+    const el = document.createElement("div");
+    el.className = "card " + c.color + (big ? " big" : "");
+    el.dataset.id = id;
+    const label = VALUE_LABEL[c.value] || c.value;
+    const v = document.createElement("span"); v.className = "v"; v.textContent = label;
+    const c1 = document.createElement("span"); c1.className = "c"; c1.textContent = label;
+    const c2 = document.createElement("span"); c2.className = "c2"; c2.textContent = label;
+    el.append(c1, v, c2);
+    el.setAttribute("aria-label", cardName(id));
+    return el;
+  }
+
+  function feedText(e) {
+    if (!e) return "";
+    const n = p => nameOf(p);
+    switch (e.type) {
+      case "start": return "Round " + (e.round + 1) + ". Starting card: " + cardName(e.card) + ".";
+      case "play": { let s = n(e.pid) + " played " + cardName(e.card); if (UNO.CARDS[e.card].color === "w") s += " → " + COLOR_NAME[e.color]; if (e.skipped) s += ". " + n(e.skipped) + " sits out"; if (e.reversed) s += ". Direction flips"; if (e.target) s += ". " + n(e.target) + " draws " + e.drawn; return s + "."; }
+      case "draw": return n(e.pid) + " drew a card.";
+      case "pass": return n(e.pid) + " passed.";
+      case "skip": return "Starting Skip: " + n(e.target) + " sits out.";
+      case "reverse": return "Starting Reverse: direction flips.";
+      case "draw2": return "Starting Draw Two: " + n(e.target) + " draws 2.";
+      case "one": return n(e.pid) + " is down to one card!";
+      case "uno": return n(e.pid) + " called UNO.";
+      case "caught": return n(e.pid) + " caught " + n(e.target) + " without UNO. Draw two!";
+      case "win": return n(e.pid) + " wins the round for " + e.points + " points!";
+    }
+    return "";
+  }
+
+  // ---------- render ----------
+  function render() {
+    const me = myPid();
+    const inRound = state.round >= 0 && !state.over;
+    const amPlayer = state.players.includes(me);
+    const isCurrent = inRound && amPlayer && state.players[state.current] === me;
+    const host = mode === "local" ? me : state.host;
+    const amHost = mode === "local" || host === pid;
+    $("hdr-code").textContent = mode === "online" ? room : (mode === "local" ? "" : "");
+
+    // local-mode curtain: show whenever the phone should change hands
+    if (mode === "local" && inRound) {
+      const cur = state.players[state.current];
+      if (curtainFor !== cur) { curtainFor = cur; curtainShown = true; }
+    } else curtainShown = false;
+
+    // opponents
+    const opps = $("opps"); opps.innerHTML = "";
+    const order = state.players.length ? state.players : state.seats;
+    const startIdx = Math.max(0, order.indexOf(me));
+    for (let k = 1; k <= order.length - 1 || (order.length === 1 && k === 1 && false); k++) {
+      const p = order[(startIdx + k) % order.length]; if (p === me) continue;
+      const el = document.createElement("div"); el.className = "opp" + (inRound && state.players[state.current] === p ? " turn" : "") + (state.round >= 0 && !state.players.includes(p) ? " out" : "");
+      const nm = document.createElement("div"); nm.className = "name"; nm.textContent = nameOf(p) + (p === host && mode === "online" ? " ★" : "");
+      const cnt = document.createElement("div"); cnt.className = "n";
+      const hand = state.hands[p];
+      if (hand) { const fan = document.createElement("span"); fan.className = "fan"; for (let i = 0; i < Math.min(hand.length, 12); i++) fan.appendChild(document.createElement("i")); cnt.append(fan, document.createTextNode(hand.length + (hand.length === 1 ? " card" : " cards"))); }
+      else cnt.textContent = state.round >= 0 ? "next round" : "ready";
+      el.append(nm, cnt);
+      if (hand && hand.length === 1) { const b = document.createElement("span"); b.className = "badge"; b.textContent = state.unoSafe[p] ? "UNO" : "1 left"; el.appendChild(b); }
+      if (inRound && hand && hand.length === 1 && !state.unoSafe[p] && (amPlayer || mode === "local")) { const b = document.createElement("button"); b.textContent = "Catch!"; b.addEventListener("click", () => send({ t: "catch", pid: mode === "local" ? order.find(x => x !== p) : pid, g: state.round, n: state.moves, target: p })); el.appendChild(b); }
+      opps.appendChild(el);
+    }
+
+    // center
+    const pile = $("pile"); pile.innerHTML = "";
+    if (state.discard.length) pile.appendChild(cardEl(state.discard[state.discard.length - 1], true));
+    else { const ph = document.createElement("div"); ph.className = "card big"; ph.style.opacity = "0.25"; pile.appendChild(ph); }
+    $("deck-count").textContent = state.round >= 0 ? state.deck.length + " left" : "";
+    $("draw").classList.toggle("can", isCurrent && !state.drew && !busy);
+    $("dir").textContent = state.dir === 1 ? "↻" : "↺"; $("dir-label").textContent = state.dir === 1 ? "clockwise" : "reversed";
+    $("swatch").className = "swatch " + (state.color || "");
+    $("color-label").textContent = state.color ? COLOR_NAME[state.color] : (state.round >= 0 ? "any color" : "color");
+
+    // status
+    const st = $("status"); st.classList.remove("mine");
+    if (state.round < 0) st.textContent = mode === "online" ? (state.seats.length < 2 ? "Waiting for players to join…" : (amHost ? "Everyone's here? Deal when ready." : "Waiting for " + nameOf(host) + " to deal.")) : "";
+    else if (state.over) st.textContent = nameOf(state.winner) + " wins the round!";
+    else if (isCurrent) { st.textContent = state.drew ? "Play the card you drew, or pass" : "Your turn"; st.classList.add("mine"); }
+    else st.textContent = nameOf(state.players[state.current]) + "'s turn";
+    $("feed").textContent = feedText(state.feed[state.feed.length - 1]);
+
+    // waiting card (lobby at table)
+    $("waiting").hidden = state.round >= 0;
+    if (state.round < 0) {
+      const seats = $("seats"); seats.innerHTML = "";
+      for (const p of state.seats) { const li = document.createElement("li"); li.textContent = nameOf(p) + " "; const sm = document.createElement("small"); sm.textContent = (p === me ? "you" : "") + (p === host && mode === "online" ? (p === me ? " · host" : "host") : ""); li.appendChild(sm); seats.appendChild(li); }
+      $("btn-deal").hidden = !amHost; $("btn-deal").disabled = state.seats.length < 2;
+      $("wait-note").textContent = mode === "online" ? (state.seats.length < 2 ? "Need at least two players. Share the link below." : state.seats.length + " of 6 seats taken.") : "";
+    }
+    $("share").hidden = !(mode === "online" && (shareOpen || state.round < 0));
+    $("btn-invite").hidden = !(mode === "online" && state.round >= 0);
+
+    // hand
+    const hw = $("hand-wrap");
+    hw.hidden = !(state.round >= 0 && state.hands[me]);
+    if (!hw.hidden) {
+      const hand = state.hands[me];
+      $("me-label").innerHTML = ""; $("me-label").append(document.createTextNode(nameOf(me) + " ")); const sm = document.createElement("small"); sm.textContent = mode === "local" ? "(your hand)" : "(you)"; $("me-label").appendChild(sm);
+      $("hand-count").textContent = hand.length + (hand.length === 1 ? " card" : " cards");
+      const h = $("hand"); h.innerHTML = "";
+      h.classList.toggle("curtained", curtainShown);
+      for (const id of hand) {
+        const el = cardEl(id, false);
+        const can = isCurrent && !busy && UNO.canPlay(state, me, id);
+        el.classList.toggle("can", can);
+        if (can) el.addEventListener("click", () => playCard(id));
+        h.appendChild(el);
+      }
+      $("btn-pass").hidden = !(isCurrent && state.drew && !busy);
+      $("btn-uno").hidden = !(inRound && amPlayer && hand.length <= 2 && !state.unoSafe[me]);
+      $("curtain").hidden = !curtainShown;
+      $("curtain-name").textContent = nameOf(me);
+    }
+
+    // round over
+    $("over-sheet").hidden = !(state.round >= 0 && state.over);
+    if (state.over) {
+      $("over-title").textContent = nameOf(state.winner) + " wins!";
+      const ul = $("scores"); ul.innerHTML = "";
+      const rows = state.seats.map(p => [p, state.scores[p] || 0]).sort((a, b) => b[1] - a[1]);
+      for (const [p, s] of rows) { const li = document.createElement("li"); if (p === state.winner) li.classList.add("win"); const a = document.createElement("span"); a.textContent = nameOf(p) + (state.hands[p] ? " · " + state.hands[p].length + " left" : ""); const b = document.createElement("span"); b.textContent = s + " pts"; li.append(a, b); ul.appendChild(li); }
+      $("btn-next").hidden = !amHost; $("btn-next").disabled = busy;
+      $("over-note").textContent = amHost ? "" : "Waiting for " + nameOf(host) + " to deal the next round.";
+    }
+    if (state.moves !== lastSeenMoves || state.round !== lastRound) { lastSeenMoves = state.moves; lastRound = state.round; }
+  }
+
+  // ---------- actions ----------
+  function send(body) {
+    if (mode === "local") { ingest(Object.assign({ id: "l" + String(log.length).padStart(5, "0"), time: log.length }, body)); return; }
+    publish(body);
+  }
+  function turnAction(body) {
+    if (busy) return;
+    if (mode === "online") { busy = true; clearTimeout(busyTimer); busyTimer = setTimeout(() => { busy = false; render(); toast("That didn't go through. Try again."); poll(); }, 7000); render(); }
+    send(body);
+  }
+  function playCard(id) {
+    const c = UNO.CARDS[id];
+    if (c.color === "w") { pendingWild = id; $("color-sheet").hidden = false; return; }
+    turnAction({ t: "play", pid: myPid(), g: state.round, n: state.moves, card: id });
+  }
+  document.querySelectorAll("#color-sheet .colors button").forEach(b => b.addEventListener("click", () => {
+    const id = pendingWild; pendingWild = null; $("color-sheet").hidden = true;
+    if (id !== null) turnAction({ t: "play", pid: myPid(), g: state.round, n: state.moves, card: id, color: b.dataset.color });
+  }));
+  $("btn-color-cancel").addEventListener("click", () => { pendingWild = null; $("color-sheet").hidden = true; });
+  $("draw").addEventListener("click", () => { const me = myPid(); if (state.round < 0 || state.over || state.players[state.current] !== me || state.drew || busy) return; turnAction({ t: "draw", pid: me, g: state.round, n: state.moves }); });
+  $("btn-pass").addEventListener("click", () => turnAction({ t: "pass", pid: myPid(), g: state.round, n: state.moves }));
+  $("btn-uno").addEventListener("click", () => send({ t: "uno", pid: myPid(), g: state.round, n: state.moves }));
+  $("btn-deal").addEventListener("click", () => turnAction({ t: "start", pid: mode === "local" ? state.seats[0] : pid, g: state.round + 1, seed: (Math.random() * 2147483647) | 0 }));
+  $("btn-next").addEventListener("click", () => turnAction({ t: "start", pid: mode === "local" ? state.seats[0] : pid, g: state.round + 1, seed: (Math.random() * 2147483647) | 0 }));
+  $("curtain").addEventListener("click", () => { curtainShown = false; render(); });
+
+  // ---------- log ----------
+  function ingest(ev) {
+    if (!ev || seen.has(ev.id)) return;
+    seen.add(ev.id); log.push(ev);
+    const before = state.moves + ":" + state.round + ":" + (state.over ? 1 : 0);
+    state = UNO.replay(log);
+    if (busy && (state.moves + ":" + state.round + ":" + (state.over ? 1 : 0)) !== before) { busy = false; clearTimeout(busyTimer); }
+    render();
+  }
+
+  // ---------- relay (same shape as Connect Four) ----------
+  let connected = false, everConnected = false, offlineTimer = null, lastEventAt = 0, retryMs = 2000, pollTimer = null, watchTimer = null, reconnectTimer = null, polling = false;
+  function handleEnvelope(env) { lastEventAt = Date.now(); if (!env || env.event !== "message") return; let body; try { body = JSON.parse(env.message); } catch { return; } ingest(Object.assign({ id: env.id, time: env.time }, body)); }
+  function openStream() {
+    if (es) { es.onerror = null; es.close(); }
+    es = new EventSource(RELAY + "/" + topic + "/sse?since=all");
+    es.onopen = () => { connected = true; everConnected = true; retryMs = 2000; lastEventAt = Date.now(); clearTimeout(offlineTimer); setConn("live", "Live"); setTimeout(poll, 1500); };
+    es.onmessage = m => { let env; try { env = JSON.parse(m.data); } catch { return; } handleEnvelope(env); };
+    es.onerror = () => {
+      connected = false; setConn("reconnecting", everConnected ? "Reconnecting…" : "Connecting…");
+      clearTimeout(offlineTimer); offlineTimer = setTimeout(() => { if (!connected) { setConn("offline", "Offline"); toast("Can't reach the relay. Trying again…", 3000); } }, 10000);
+      if (es && es.readyState === 2) { clearTimeout(reconnectTimer); reconnectTimer = setTimeout(() => { if (mode === "online") openStream(); }, retryMs); retryMs = Math.min(retryMs * 2, 30000); }
+    };
+  }
+  async function poll() {
+    if (mode !== "online" || !topic || polling) return; polling = true;
+    try {
+      const r = await fetch(RELAY + "/" + topic + "/json?poll=1&since=all", { cache: "no-store" });
+      if (!r.ok) throw 0;
+      const before = log.length;
+      for (const line of (await r.text()).split("\n")) { if (!line.trim()) continue; let env; try { env = JSON.parse(line); } catch { continue; } handleEnvelope(env); }
+      if (log.length > before && es && es.readyState !== 1) openStream();
+    } catch {} finally { polling = false; }
+  }
+  function connect(code) {
+    room = code; topic = PREFIX + code.toLowerCase(); log = []; seen = new Set(); state = UNO.replay([]); busy = false;
+    setConn("connecting", "Connecting…"); openStream();
+    clearInterval(pollTimer); pollTimer = setInterval(poll, 12000);
+    clearInterval(watchTimer); watchTimer = setInterval(() => { if (mode !== "online") return; if (Date.now() - lastEventAt > 90000 || (es && es.readyState === 2)) openStream(); }, 15000);
+  }
+  function disconnect() { if (es) { es.onerror = null; es.close(); es = null; } clearInterval(pollTimer); clearInterval(watchTimer); clearTimeout(reconnectTimer); clearTimeout(offlineTimer); }
+  async function publish(body) {
+    try { const r = await fetch(RELAY + "/" + topic, { method: "POST", body: JSON.stringify(body) }); if (!r.ok) throw new Error("HTTP " + r.status); setTimeout(() => { if (busy) poll(); }, 2500); return true; }
+    catch { busy = false; render(); toast("Couldn't send. Check your signal."); return false; }
+  }
+  function hello() { const name = ($("name-join").value || $("name-lobby").value).trim().slice(0, 18); if (name) store.set("uno:name", name); publish({ t: "hello", pid, name }).then(() => setTimeout(poll, 1200)); }
+
+  // ---------- modes ----------
+  function startOnline(code, isCreator) {
+    mode = "online"; const name = isCreator ? $("name-lobby").value : $("name-join").value; $("name-join").value = name; $("name-lobby").value = name;
+    connect(code); store.set("uno:joined:" + code, "1");
+    $("share-code").textContent = code; $("join-code").textContent = code;
+    const link = roomLink(code); $("share-link").textContent = link; $("qr").innerHTML = "";
+    try { new QRCode($("qr"), { text: link, width: 168, height: 168, colorDark: "#1b1f2a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M }); } catch {}
+    shareOpen = isCreator; show("table"); render(); hello();
+    if (location.hash !== "#" + code) history.replaceState(null, "", "#" + code);
+  }
+  function startLocal(n) {
+    disconnect(); mode = "local"; room = null; log = []; seen = new Set(); busy = false; curtainFor = null;
+    for (let i = 1; i <= n; i++) ingest({ id: "l-h" + i, time: i, t: "hello", pid: "l" + i, name: "Player " + i });
+    ingest({ id: "l-start", time: 99, t: "start", pid: "l1", g: 0, seed: (Math.random() * 2147483647) | 0 });
+    setConn("idle", "Pass & play"); show("table"); render();
+    if (location.hash !== "#LOCAL") history.replaceState(null, "", "#LOCAL");
+  }
+  function leave() { disconnect(); mode = "lobby"; room = null; busy = false; setConn("idle", "Lobby"); show("lobby"); $("over-sheet").hidden = true; history.replaceState(null, "", location.pathname); }
+  function route() {
+    const h = location.hash.replace("#", "").toUpperCase();
+    if (h === "LOCAL") return startLocal(localCount);
+    if (/^[A-Z2-9]{4,8}$/.test(h)) {
+      if (mode === "online" && room === h) return;
+      if (store.get("uno:joined:" + h)) return startOnline(h, false);
+      $("join-code").textContent = h; show("join"); setConn("idle", "Invited"); return;
+    }
+    if (mode !== "lobby") leave(); else show("lobby");
+  }
+
+  // ---------- wiring ----------
+  for (let n = 2; n <= 6; n++) { const b = document.createElement("button"); b.className = "secondary"; b.textContent = n; b.setAttribute("aria-pressed", n === localCount); b.addEventListener("click", () => { localCount = n; document.querySelectorAll("#counts button").forEach(x => x.setAttribute("aria-pressed", x.textContent == n)); }); $("counts").appendChild(b); }
+  $("btn-new").addEventListener("click", () => startOnline(roomCode(), true));
+  $("btn-local").addEventListener("click", () => startLocal(localCount));
+  $("btn-join").addEventListener("click", () => startOnline($("join-code").textContent, false));
+  $("btn-join-home").addEventListener("click", () => { history.replaceState(null, "", location.pathname); show("lobby"); });
+  $("btn-leave").addEventListener("click", leave);
+  $("btn-invite").addEventListener("click", () => { shareOpen = !shareOpen; render(); });
+  $("btn-share").addEventListener("click", async () => { const url = roomLink(room); if (navigator.share) { try { await navigator.share({ title: "Uno", text: "Join my Uno table", url }); } catch {} } else copyLink(); });
+  $("btn-copy").addEventListener("click", copyLink);
+  async function copyLink() { try { await navigator.clipboard.writeText(roomLink(room)); toast("Link copied"); } catch { toast("Long-press the link to copy"); } }
+  window.addEventListener("hashchange", route);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && mode === "online") { poll(); if (es && es.readyState === 2) openStream(); } });
+  window.addEventListener("online", () => { if (mode === "online") { poll(); openStream(); } });
+  window.__uno = () => ({ pid, mode, room, round: state.round, moves: state.moves, over: state.over, current: state.players[state.current], players: state.players, seats: state.seats, hands: Object.fromEntries(Object.entries(state.hands).map(([k, v]) => [k, v.length])), color: state.color, busy, es: es && es.readyState });
+  route();
+})();
+</script>
+</body>
+</html>
