@@ -1,0 +1,25 @@
+name: Archive map pins
+on:
+  schedule:
+    - cron: "17 * * * *"     # hourly; the relay only remembers pins for 12 hours
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: archive-pins
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tools/archive-pins.mjs
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- map/pins.json; then echo "no change"; exit 0; fi
+          git config user.name "pin-archiver"
+          git config user.email "actions@users.noreply.github.com"
+          git add map/pins.json
+          git commit -m "Archive map pins"
+          git push

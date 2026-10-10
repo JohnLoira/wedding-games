@@ -294,8 +294,8 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; 
 
   function render() {
     const seat = mode === "local" ? state.turn : C4.seatOf(state, pid);
-    const myTurn = !state.over && (mode === "local" || (seat && seat === state.turn));
     const bothSeated = mode === "local" || (state.seats.R && state.seats.Y);
+    const myTurn = !state.over && bothSeated && (mode === "local" || (seat && seat === state.turn));
 
     // board
     const newDisc = state.lastMove && (state.gameIndex !== lastRendered.gameIndex || state.moves !== lastRendered.moves);

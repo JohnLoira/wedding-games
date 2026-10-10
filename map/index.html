@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How Do You Know Them</title>
+<meta name="description" content="Drop a pin where you came from and say how you know the couple. A guest map that fills in over the evening.">
+<meta property="og:title" content="How do you know them?">
+<meta property="og:description" content="Put yourself on the guest map: where you came from, and how you know the couple.">
+<meta name="theme-color" content="#3f6b5a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Nunito+Sans:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+/* Layout: map first, a working panel beneath it. On wide screens the panel sits beside the map. */
+:root {
+  --bg: #f3f5f1;
+  --surface: #ffffff;
+  --ink: #1f2a24;
+  --muted: #65716b;
+  --line: #d8ded9;
+  --accent: #3f6b5a;
+  --accent-ink: #ffffff;
+  --gold: #c9962f;
+  --gold-soft: #f3e4c2;
+  --both: #2b3a44;
+  --danger: #b84a3a;
+  --display: "Cormorant Garamond", "Georgia", "Times New Roman", serif;
+  --body: "Nunito Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121816;
+    --surface: #1a2320;
+    --ink: #eef2ee;
+    --muted: #9eaba4;
+    --line: #2b3733;
+    --accent: #6fae95;
+    --accent-ink: #0f1613;
+    --gold: #e0b14f;
+    --gold-soft: #3b3220;
+    --both: #c6d2da;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.45;
+  padding-inline: 0; padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px);
+  -webkit-tap-highlight-color: transparent;
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding-inline: 16px; display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .wrap { grid-template-columns: 1.3fr 1fr; align-items: start; } .wrap > header, .wrap > footer { grid-column: 1 / -1; } }
+header { padding-top: 14px; display: flex; flex-direction: column; gap: 4px; }
+.eyebrow { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.16em; color: var(--muted); font-weight: 700; }
+h1 { font-family: var(--display); font-weight: 600; font-size: 2.3rem; line-height: 1.05; margin: 0; text-wrap: balance; }
+h1 em { font-style: italic; color: var(--accent); }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+.stats b { color: var(--ink); font-weight: 700; }
+#map { height: min(58vh, 560px); border-radius: 16px; border: 1px solid var(--line); background: #dfe7e2; overflow: hidden; z-index: 0; }
+@media (min-width: 900px) { #map { height: 640px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); } }
+.leaflet-container { font-family: var(--body); }
+.leaflet-popup-content-wrapper { border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: 0 8px 24px -12px rgba(0,0,0,0.4); }
+.leaflet-popup-tip { background: var(--surface); }
+.leaflet-popup-content { margin: 12px 14px; line-height: 1.4; }
+.leaflet-popup-content .who { font-family: var(--display); font-size: 1.25rem; font-weight: 600; }
+.leaflet-popup-content .from { color: var(--muted); font-size: 0.85rem; }
+.leaflet-popup-content .how { margin-top: 4px; }
+.leaflet-control-attribution { font-size: 10px; background: color-mix(in srgb, var(--surface) 85%, transparent) !important; color: var(--muted) !important; }
+.leaflet-control-attribution a { color: var(--muted) !important; }
+.leaflet-bar a { background: var(--surface) !important; color: var(--ink) !important; border-color: var(--line) !important; }
+.pin { width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.35); background: var(--accent); }
+.pin.b { background: var(--gold); } .pin.both { background: var(--both); } .pin.mine { outline: 3px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 1px; }
+.draft { width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--accent); border: 3px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,0.35); animation: bob 1.2s ease-in-out infinite alternate; }
+@keyframes bob { to { transform: rotate(-45deg) translate(2px, -2px); } }
+@media (prefers-reduced-motion: reduce) { .draft { animation: none; } }
+
+.panel { display: flex; flex-direction: column; gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.card h2 { font-family: var(--display); font-weight: 600; font-size: 1.5rem; margin: 0; }
+.card p { margin: 0; color: var(--muted); }
+label { font-weight: 700; font-size: 0.88rem; display: flex; flex-direction: column; gap: 6px; }
+label span.hint { font-weight: 400; color: var(--muted); font-size: 0.82rem; }
+input[type="text"], textarea { font: inherit; font-size: 1rem; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+textarea { resize: vertical; min-height: 64px; }
+input:focus, textarea:focus { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent); }
+button { font: inherit; font-weight: 700; font-size: 1rem; cursor: pointer; padding: 13px 18px; border-radius: 13px; border: 0; background: var(--accent); color: var(--accent-ink); display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+button.secondary { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+button.link { background: none; color: var(--muted); padding: 4px 6px; font-weight: 600; text-decoration: underline; font-size: 0.85rem; }
+button:disabled { opacity: 0.5; cursor: default; }
+.search { position: relative; }
+.results { position: absolute; left: 0; right: 0; top: 100%; z-index: 5; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; margin-top: 4px; overflow: hidden; box-shadow: 0 10px 24px -12px rgba(0,0,0,0.4); }
+.results button { width: 100%; justify-content: flex-start; text-align: left; background: none; color: var(--ink); border-radius: 0; padding: 10px 13px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.results button:last-child { border-bottom: 0; }
+.results button small { display: block; color: var(--muted); font-weight: 400; }
+.picked { display: flex; align-items: center; gap: 8px; font-size: 0.92rem; color: var(--muted); min-height: 1.4em; }
+.picked.ok { color: var(--ink); }
+.sides { display: flex; gap: 8px; flex-wrap: wrap; }
+.sides label { flex: 1 1 90px; flex-direction: row; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; font-weight: 600; }
+.sides label:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.sides input { margin: 0; accent-color: var(--accent); }
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.list li { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line); }
+.list li:first-child { border-top: 0; }
+.list .dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 6px; background: var(--accent); }
+.list .dot.b { background: var(--gold); } .list .dot.both { background: var(--both); }
+.list .who { font-weight: 700; }
+.list .from { color: var(--muted); font-size: 0.85rem; }
+.list .how { margin-top: 2px; }
+.list .when { color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
+.empty { color: var(--muted); font-style: italic; }
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: 0.9rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 20; max-width: calc(100vw - 32px); text-align: center; }
+.toast.show { opacity: 1; }
+footer { color: var(--muted); font-size: 0.78rem; padding-block: 8px 24px; display: flex; gap: 12px; flex-wrap: wrap; }
+footer a { color: inherit; }
+.status { font-size: 0.75rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.status[data-live="1"]::before { background: #2e9e6b; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">The guest map</div>
+    <h1 id="title">How do you know <em>the couple</em>?</h1>
+    <div class="stats" id="stats"><span class="empty">Be the first pin on the map.</span></div>
+  </header>
+
+  <div id="map" role="application" aria-label="Guest map"></div>
+
+  <section class="panel">
+    <div class="card" id="intro">
+      <h2>Put yourself on the map</h2>
+      <p id="intro-text">Where did you come from, and how do you know them? Takes twenty seconds. The couple keeps the map.</p>
+      <button id="btn-add">Add my pin</button>
+    </div>
+
+    <form class="card" id="form" hidden autocomplete="off">
+      <h2>Your pin</h2>
+      <label>Your name <input type="text" id="f-name" maxlength="40" required placeholder="First name, or you and a plus one"></label>
+      <label>Where you came from
+        <div class="search">
+          <input type="text" id="f-city" maxlength="80" placeholder="Type a city, then pick it" aria-autocomplete="list">
+          <div class="results" id="results" hidden></div>
+        </div>
+        <span class="hint">Or tap the map to drop the pin yourself.</span>
+      </label>
+      <div class="picked" id="picked">No spot picked yet.</div>
+      <label>How do you know them? <textarea id="f-line" maxlength="160" required placeholder="College roommate. Met at the bar where they had their first date. Cousin on the loud side of the family."></textarea></label>
+      <div id="side-wrap" hidden>
+        <div class="eyebrow" style="margin-bottom:6px">I'm here for</div>
+        <div class="sides" id="sides"></div>
+      </div>
+      <button type="submit" id="btn-save">Pin me on the map</button>
+      <button type="button" class="link" id="btn-cancel">Never mind</button>
+    </form>
+
+    <div class="card">
+      <h2>Everyone so far <span class="status" id="status">connecting</span></h2>
+      <ul class="list" id="list"><li class="empty">Nobody yet. Go first.</li></ul>
+    </div>
+  </section>
+
+  <footer>
+    <span>Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, tiles by <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>, search by Nominatim.</span>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="config.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function () {
+  const W = window.WEDDING || {};
+  const RELAY = "https://ntfy.sh";
+  const TOPIC = W.topic;
+  const $ = id => document.getElementById(id);
+  const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+  const names = Array.isArray(W.couple) ? W.couple.map(s => String(s || "").trim()).filter(Boolean) : [];
+  const coupleText = names.length === 2 ? names[0] + " & " + names[1] : "the couple";
+  const venue = W.venue && typeof W.venue.lat === "number" && typeof W.venue.lng === "number" ? W.venue : null;
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+
+  // ---------- copy ----------
+  $("title").innerHTML = "How do you know <em></em>?"; $("title").querySelector("em").textContent = coupleText;
+  $("intro-text").textContent = "Where did you come from, and how do you know " + (names.length === 2 ? "them" : "the couple") + "? Takes twenty seconds. " + (names.length === 2 ? names[0] + " and " + names[1] : "The couple") + " keep the map.";
+  if (names.length === 2) {
+    $("side-wrap").hidden = false;
+    for (const [v, label] of [["a", names[0]], ["b", names[1]], ["both", "Both"]]) {
+      const l = document.createElement("label"); const i = document.createElement("input"); i.type = "radio"; i.name = "side"; i.value = v; i.id = "side-" + v;
+      l.appendChild(i); l.appendChild(document.createTextNode(label)); $("sides").appendChild(l);
+    }
+  }
+
+  function toast(msg, ms = 2400) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), ms); }
+
+  // ---------- map ----------
+  const map = L.map("map", { worldCopyJump: true, zoomControl: true, attributionControl: true });
+  if (venue) map.setView([venue.lat, venue.lng], 5); else map.setView([25, -30], 2);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/" + (dark ? "dark_all" : "rastertiles/voyager_nolabels") + "/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 18, attribution: "" }).addTo(map);
+  if (!dark) L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 18, pane: "shadowPane" }).addTo(map);
+  if (venue) L.marker([venue.lat, venue.lng], { icon: L.divIcon({ className: "", html: '<div style="font-size:22px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">💍</div>', iconSize: [24, 24], iconAnchor: [12, 12] }), interactive: false }).addTo(map);
+  const layer = L.layerGroup().addTo(map);
+
+  // ---------- state ----------
+  const pins = new Map();          // id -> pin
+  const removed = new Set();
+  const seenEv = new Set();
+  const mine = new Set(store.get("wm:mine", []));
+  let draft = null, draftMarker = null, placing = false;
+
+  function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
+  function jitter(p) { const h = hash(p.id); return [p.lat + ((h % 1000) / 1000 - 0.5) * 0.03, p.lng + (((h / 1000) % 1000) / 1000 - 0.5) * 0.03]; }
+  function miles(a, b) { const R = 3958.8, toR = d => d * Math.PI / 180; const dLat = toR(b.lat - a.lat), dLng = toR(b.lng - a.lng); const x = Math.sin(dLat / 2) ** 2 + Math.cos(toR(a.lat)) * Math.cos(toR(b.lat)) * Math.sin(dLng / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); }
+  function sideName(s) { return s === "a" ? names[0] : s === "b" ? names[1] : s === "both" ? "both" : ""; }
+
+  function applyPin(p) {
+    if (!p || typeof p.id !== "string" || typeof p.lat !== "number" || typeof p.lng !== "number") return;
+    if (removed.has(p.id) || pins.has(p.id)) return;
+    pins.set(p.id, { id: p.id, name: String(p.name || "Someone").slice(0, 40), city: String(p.city || "").slice(0, 80), line: String(p.line || "").slice(0, 160), lat: p.lat, lng: p.lng, side: ["a", "b", "both"].includes(p.side) ? p.side : "", ts: typeof p.ts === "number" ? p.ts : Date.now() });
+  }
+  function applyRemove(id) { if (typeof id !== "string") return; removed.add(id); pins.delete(id); }
+
+  function render() {
+    layer.clearLayers();
+    const all = [...pins.values()].sort((a, b) => b.ts - a.ts);
+    for (const p of all) {
+      const cls = "pin " + (p.side === "b" ? "b " : p.side === "both" ? "both " : "") + (mine.has(p.id) ? "mine" : "");
+      const m = L.marker(jitter(p), { icon: L.divIcon({ className: "", html: '<div class="' + cls.trim() + '"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }), title: p.name });
+      const el = document.createElement("div");
+      const who = document.createElement("div"); who.className = "who"; who.textContent = p.name;
+      const from = document.createElement("div"); from.className = "from"; from.textContent = p.city + (p.side ? " · for " + sideName(p.side) : "");
+      const how = document.createElement("div"); how.className = "how"; how.textContent = p.line;
+      el.append(who, from, how);
+      m.bindPopup(el, { maxWidth: 260 });
+      layer.addLayer(m);
+    }
+    // list
+    const list = $("list"); list.innerHTML = "";
+    if (!all.length) { const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody yet. Go first."; list.appendChild(li); }
+    for (const p of all) {
+      const li = document.createElement("li");
+      const dot = document.createElement("span"); dot.className = "dot " + (p.side === "b" ? "b" : p.side === "both" ? "both" : "");
+      const body = document.createElement("div");
+      const who = document.createElement("div"); who.className = "who"; who.textContent = p.name;
+      const from = document.createElement("div"); from.className = "from"; from.textContent = p.city + (p.side ? " · for " + sideName(p.side) : "");
+      const how = document.createElement("div"); how.className = "how"; how.textContent = p.line;
+      body.append(who, from, how);
+      const right = document.createElement("div"); right.style.display = "flex"; right.style.flexDirection = "column"; right.style.alignItems = "flex-end"; right.style.gap = "4px";
+      const when = document.createElement("span"); when.className = "when"; when.textContent = new Date(p.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); right.appendChild(when);
+      if (mine.has(p.id)) { const b = document.createElement("button"); b.type = "button"; b.className = "link"; b.textContent = "remove"; b.addEventListener("click", () => removeMine(p.id)); right.appendChild(b); }
+      li.addEventListener("click", e => { if (e.target.tagName === "BUTTON") return; map.flyTo(jitter(p), Math.max(map.getZoom(), 6), { duration: 0.8 }); });
+      li.append(dot, body, right);
+      list.appendChild(li);
+    }
+    // stats
+    const st = $("stats"); st.innerHTML = "";
+    if (!all.length) { st.innerHTML = '<span class="empty">Be the first pin on the map.</span>'; return; }
+    const places = new Set(all.map(p => p.city.trim().toLowerCase()).filter(Boolean)).size;
+    const parts = [["<b>" + all.length + "</b> " + (all.length === 1 ? "guest" : "guests")], ["<b>" + places + "</b> " + (places === 1 ? "place" : "places")]];
+    if (venue) {
+      let far = null; for (const p of all) { const d = miles(venue, p); if (!far || d > far.d) far = { d, p }; }
+      if (far && far.d > 1) { const s = document.createElement("span"); s.innerHTML = "farthest: <b></b> from <b></b>, " + Math.round(far.d).toLocaleString() + " mi"; const bs = s.querySelectorAll("b"); bs[0].textContent = far.p.name; bs[1].textContent = far.p.city || "somewhere"; parts.push([s.innerHTML]); }
+    }
+    if (names.length === 2) { const a = all.filter(p => p.side === "a").length, b = all.filter(p => p.side === "b").length, both = all.filter(p => p.side === "both").length; const sp = document.createElement("span"); sp.textContent = `${names[0]} ${a} · ${names[1]} ${b} · both ${both}`; parts.push([sp.innerHTML]); }
+    for (const [html] of parts) { const s = document.createElement("span"); s.innerHTML = html; st.appendChild(s); }
+  }
+
+  // ---------- data in ----------
+  function handleEnvelope(env) {
+    if (!env || env.event !== "message" || seenEv.has(env.id)) return;
+    seenEv.add(env.id);
+    let body; try { body = JSON.parse(env.message); } catch { return; }
+    if (body.t === "pin") applyPin(Object.assign({ ts: env.time * 1000 }, body));
+    else if (body.t === "remove") applyRemove(body.id);
+    scheduleRender();
+  }
+  let renderTimer = null;
+  function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 60); }
+
+  async function loadArchive() {
+    try {
+      const r = await fetch("pins.json?t=" + Date.now(), { cache: "no-store" });
+      if (!r.ok) return;
+      const db = await r.json();
+      for (const id of db.removed || []) applyRemove(id);
+      for (const p of db.pins || []) applyPin(p);
+      scheduleRender();
+    } catch {}
+  }
+  let es = null, lastEventAt = 0, retryMs = 2000;
+  function setLive(on) { $("status").dataset.live = on ? "1" : "0"; $("status").textContent = on ? "live" : "reconnecting"; }
+  function openStream() {
+    if (!TOPIC) return;
+    if (es) { es.onerror = null; es.close(); }
+    es = new EventSource(RELAY + "/" + TOPIC + "/sse?since=all");
+    es.onopen = () => { retryMs = 2000; lastEventAt = Date.now(); setLive(true); setTimeout(poll, 1500); };
+    es.onmessage = m => { lastEventAt = Date.now(); let env; try { env = JSON.parse(m.data); } catch { return; } handleEnvelope(env); };
+    es.onerror = () => { setLive(false); if (es && es.readyState === 2) { setTimeout(openStream, retryMs); retryMs = Math.min(retryMs * 2, 30000); } };
+  }
+  let polling = false;
+  async function poll() {
+    if (!TOPIC || polling) return; polling = true;
+    try {
+      const r = await fetch(RELAY + "/" + TOPIC + "/json?poll=1&since=all", { cache: "no-store" });
+      if (!r.ok) throw 0;
+      for (const line of (await r.text()).split("\n")) { if (!line.trim()) continue; let env; try { env = JSON.parse(line); } catch { continue; } handleEnvelope(env); }
+    } catch {} finally { polling = false; }
+  }
+  setInterval(poll, 45000);
+  setInterval(() => { if (es && (es.readyState === 2 || Date.now() - lastEventAt > 90000)) openStream(); }, 20000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { poll(); if (es && es.readyState === 2) openStream(); } });
+  async function publish(body) {
+    const r = await fetch(RELAY + "/" + TOPIC, { method: "POST", body: JSON.stringify(body) });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+  }
+
+  // ---------- placing a pin ----------
+  function setDraft(lat, lng, label) {
+    draft = { lat, lng };
+    if (!draftMarker) {
+      draftMarker = L.marker([lat, lng], { draggable: true, icon: L.divIcon({ className: "", html: '<div class="draft"></div>', iconSize: [26, 26], iconAnchor: [13, 26] }), zIndexOffset: 1000 }).addTo(map);
+      draftMarker.on("dragend", () => { const ll = draftMarker.getLatLng(); draft = { lat: ll.lat, lng: ll.lng }; showPicked(); });
+    } else draftMarker.setLatLng([lat, lng]);
+    if (label) $("f-city").value = label;
+    showPicked();
+  }
+  function showPicked() {
+    const el = $("picked");
+    if (!draft) { el.className = "picked"; el.textContent = "No spot picked yet."; return; }
+    el.className = "picked ok"; el.textContent = "📍 " + ($("f-city").value.trim() || (draft.lat.toFixed(2) + ", " + draft.lng.toFixed(2))) + " · drag the pin to adjust";
+  }
+  map.on("click", e => { if (!placing) return; setDraft(e.latlng.lat, e.latlng.lng); });
+
+  // city search (Nominatim, debounced, max one request in flight)
+  let searchTimer = null, searchAbort = null;
+  function shortLabel(hit) {
+    const a = hit.address || {};
+    const city = a.city || a.town || a.village || a.hamlet || a.municipality || a.county || hit.name || (hit.display_name || "").split(",")[0];
+    const region = a.country_code === "us" ? a.state : a.country;
+    return [city, region].filter(Boolean).join(", ");
+  }
+  $("f-city").addEventListener("input", () => {
+    const q = $("f-city").value.trim();
+    clearTimeout(searchTimer);
+    if (q.length < 2) { $("results").hidden = true; return; }
+    searchTimer = setTimeout(async () => {
+      if (searchAbort) searchAbort.abort();
+      searchAbort = new AbortController();
+      try {
+        const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=" + encodeURIComponent(q), { signal: searchAbort.signal, headers: { "Accept-Language": "en" } });
+        const hits = await r.json();
+        const box = $("results"); box.innerHTML = "";
+        for (const h of hits) {
+          const b = document.createElement("button"); b.type = "button";
+          const label = shortLabel(h);
+          b.textContent = label; const sm = document.createElement("small"); sm.textContent = (h.display_name || "").split(",").slice(0, 4).join(","); b.appendChild(sm);
+          b.addEventListener("click", () => { box.hidden = true; setDraft(+h.lat, +h.lon, label); map.flyTo([+h.lat, +h.lon], 7, { duration: 0.9 }); });
+          box.appendChild(b);
+        }
+        box.hidden = !hits.length;
+      } catch {}
+    }, 550);
+  });
+  document.addEventListener("click", e => { if (!e.target.closest(".search")) $("results").hidden = true; });
+
+  $("btn-add").addEventListener("click", () => {
+    $("intro").hidden = true; $("form").hidden = false; placing = true;
+    $("f-name").value = store.get("wm:name", ""); $("f-name").focus();
+    toast("Tap the map where you came from, or search a city", 3200);
+  });
+  $("btn-cancel").addEventListener("click", resetForm);
+  function resetForm() {
+    $("form").hidden = true; $("intro").hidden = false; placing = false; draft = null;
+    if (draftMarker) { map.removeLayer(draftMarker); draftMarker = null; }
+    $("f-city").value = ""; $("f-line").value = ""; $("results").hidden = true; showPicked();
+    const checked = document.querySelector('input[name="side"]:checked'); if (checked) checked.checked = false;
+  }
+  $("form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("f-name").value.trim(), line = $("f-line").value.trim(), city = $("f-city").value.trim();
+    if (!name) return toast("Add your name first");
+    if (!draft) return toast("Pick a spot: search a city or tap the map");
+    if (!line) return toast("Say how you know them, even one word");
+    const side = (document.querySelector('input[name="side"]:checked') || {}).value || "";
+    const pin = { t: "pin", id: "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, city: city || (draft.lat.toFixed(2) + ", " + draft.lng.toFixed(2)), line, lat: +draft.lat.toFixed(4), lng: +draft.lng.toFixed(4), side, ts: Date.now() };
+    $("btn-save").disabled = true;
+    try {
+      await publish(pin);
+      mine.add(pin.id); store.set("wm:mine", [...mine]); store.set("wm:name", name);
+      applyPin(pin); render(); resetForm();
+      map.flyTo(jitter(pin), Math.max(map.getZoom(), 5), { duration: 0.8 });
+      toast("You're on the map 🎉");
+    } catch { toast("Couldn't save. Check your signal and try again.", 3500); }
+    finally { $("btn-save").disabled = false; }
+  });
+  async function removeMine(id) {
+    try { await publish({ t: "remove", id }); applyRemove(id); mine.delete(id); store.set("wm:mine", [...mine]); render(); toast("Pin removed"); }
+    catch { toast("Couldn't remove it right now."); }
+  }
+
+  // ---------- go ----------
+  loadArchive();
+  openStream();
+  if (!TOPIC) { setLive(false); $("status").textContent = "no relay configured"; }
+  window.__wm = () => ({ pins: [...pins.values()], removed: [...removed], mine: [...mine], es: es && es.readyState });
+})();
+</script>
+</body>
+</html>

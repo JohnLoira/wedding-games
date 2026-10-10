@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wedding Table Games</title>
+<meta name="description" content="Two things to do between the ceremony and the cake: a guest map and Connect Four over a link.">
+<meta name="theme-color" content="#3f6b5a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Nunito+Sans:wght@400;600;700&display=swap">
+<style>
+:root { --bg:#f3f5f1; --surface:#fff; --ink:#1f2a24; --muted:#65716b; --line:#d8ded9; --accent:#3f6b5a; --accent-ink:#fff; --blue:#2a48a8; --display:"Cormorant Garamond",Georgia,serif; --body:"Nunito Sans","Segoe UI",Helvetica,Arial,sans-serif; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg:#121816; --surface:#1a2320; --ink:#eef2ee; --muted:#9eaba4; --line:#2b3733; --accent:#6fae95; --accent-ink:#0f1613; --blue:#5b7ce6; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--body); font-size:16px; line-height:1.5; padding-inline:16px; padding-block: calc(env(safe-area-inset-top,0px) + 28px) calc(env(safe-area-inset-bottom,0px) + 32px); }
+main { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+.eyebrow { font-size:.72rem; text-transform:uppercase; letter-spacing:.16em; color:var(--muted); font-weight:700; }
+h1 { font-family:var(--display); font-weight:600; font-size:2.6rem; line-height:1.05; margin:0; text-wrap:balance; }
+p { margin:0; color:var(--muted); max-width: 60ch; }
+.cards { display:grid; gap:14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+a.card { display:flex; flex-direction:column; gap:10px; background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:18px; color:inherit; text-decoration:none; }
+a.card:hover, a.card:focus-visible { border-color: var(--accent); outline: none; }
+a.card h2 { font-family:var(--display); font-weight:600; font-size:1.7rem; margin:0; }
+a.card .go { margin-top:auto; font-weight:700; color:var(--accent); }
+a.card.blue .go { color: var(--blue); }
+a.card img { width: 140px; height: 140px; border-radius: 10px; background:#fff; padding: 6px; align-self: flex-start; }
+footer { color:var(--muted); font-size:.8rem; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <div class="eyebrow">Between the ceremony and the cake</div>
+    <h1>Two things to do at the table</h1>
+  </div>
+  <div class="cards">
+    <a class="card" href="map/">
+      <h2>How do you know them?</h2>
+      <p>Drop a pin where you came from and say how you know the couple. Watch the map fill in over the night. They keep it.</p>
+      <img src="qr/map.png" alt="QR code for the guest map">
+      <span class="go">Open the guest map →</span>
+    </a>
+    <a class="card blue" href="connect4/">
+      <h2>Connect Four over a link</h2>
+      <p>Challenge anyone at the table. Two phones, one board, moves sync live. Or pass one phone back and forth.</p>
+      <img src="qr/connect4.png" alt="QR code for Connect Four">
+      <span class="go">Start a game →</span>
+    </a>
+  </div>
+  <footer>Nothing to install, no accounts. Just open the link.</footer>
+</main>
+</body>
+</html>
