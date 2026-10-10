@@ -312,7 +312,7 @@ footer a { color: inherit; }
       for (const line of (await r.text()).split("\n")) { if (!line.trim()) continue; let env; try { env = JSON.parse(line); } catch { continue; } handleEnvelope(env); }
     } catch {} finally { polling = false; }
   }
-  setInterval(() => { if (!(es && es.readyState === 1 && Date.now() - lastEventAt > 60000)) return; poll(); }, 60000);
+  setInterval(() => { if (es && es.readyState === 1 && Date.now() - lastEventAt < 60000) return; poll(); }, 60000);   // only when the stream looks dead
   setInterval(() => { if (es && (es.readyState === 2 || Date.now() - lastEventAt > 90000)) openStream(); }, 20000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { poll(); if (es && es.readyState === 2) openStream(); } });
   async function publish(body) {
