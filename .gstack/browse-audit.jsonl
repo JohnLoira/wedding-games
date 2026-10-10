@@ -422,3 +422,7 @@
 {"ts":"2026-10-10T15:09:25.505Z","cmd":"js","args":"document.querySelectorAll('#list button').length","origin":"http://127.0.0.1:8765/map/","durationMs":1,"status":"ok","hasCookies":false,"mode":"launched"}
 {"ts":"2026-10-10T15:09:25.531Z","cmd":"console","args":"--errors","origin":"http://127.0.0.1:8765/map/","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
 {"ts":"2026-10-10T15:09:25.591Z","cmd":"screenshot","args":"/private/tmp/claude-501/-Users-johnathonloira/d2ad5b1b-4fe6-4a12-92e5-ebc7b6c3b631/scratchpad/map-fresh.png","origin":"http://127.0.0.1:8765/map/","durationMs":35,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-10-10T15:10:06.332Z","cmd":"goto","args":"http://127.0.0.1:8765/map/","origin":"http://127.0.0.1:8765/map/","durationMs":11,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-10-10T15:10:10.400Z","cmd":"js","args":"document.querySelectorAll('.leaflet-tile-loaded').length","origin":"http://127.0.0.1:8765/map/","durationMs":1,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-10-10T15:10:10.430Z","cmd":"js","args":"document.querySelector('.leaflet-tile')?.src","origin":"http://127.0.0.1:8765/map/","durationMs":1,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-10-10T15:10:10.487Z","cmd":"screenshot","args":"/private/tmp/claude-501/-Users-johnathonloira/d2ad5b1b-4fe6-4a12-92e5-ebc7b6c3b631/scratchpad/map-osm.png","origin":"http://127.0.0.1:8765/map/","durationMs":30,"status":"ok","hasCookies":false,"mode":"launched"}

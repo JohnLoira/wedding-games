@@ -166,7 +166,7 @@ footer a { color: inherit; }
   </section>
 
   <footer>
-    <span>Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, tiles by <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>, search by Nominatim.</span>
+    <span>Map data and tiles © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. Search by Nominatim.</span>
   </footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -201,8 +201,8 @@ footer a { color: inherit; }
   // ---------- map ----------
   const map = L.map("map", { worldCopyJump: true, zoomControl: true, attributionControl: true });
   if (venue) map.setView([venue.lat, venue.lng], 5); else map.setView([25, -30], 2);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/" + (dark ? "dark_all" : "rastertiles/voyager_nolabels") + "/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 18, attribution: "" }).addTo(map);
-  if (!dark) L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 18, pane: "shadowPane" }).addTo(map);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "" }).addTo(map);
+  if (dark) document.querySelector(".leaflet-tile-pane").style.filter = "invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6)";
   if (venue) L.marker([venue.lat, venue.lng], { icon: L.divIcon({ className: "", html: '<div style="font-size:22px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">💍</div>', iconSize: [24, 24], iconAnchor: [12, 12] }), interactive: false }).addTo(map);
   const layer = L.layerGroup().addTo(map);
 
