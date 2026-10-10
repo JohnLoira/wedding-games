@@ -110,6 +110,7 @@ button.secondary { background: var(--surface); color: var(--ink); border: 1px so
 button.small { font-size: 0.9rem; padding: 9px 14px; border-radius: 10px; }
 button.link { background: none; color: var(--muted); padding: 6px 8px; font-weight: 600; text-decoration: underline; }
 button:disabled { opacity: 0.5; cursor: default; }
+.col:disabled { opacity: 1; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; }
 .row > * { flex: 1 1 140px; }
 
@@ -256,7 +257,7 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; 
   let log = [], seen = new Set(), state = C4.replay([]);
   let pending = null, pendingTimer = null, lastRendered = { gameIndex: -1, moves: -1 };
   let connected = false, everConnected = false, offlineTimer = null;
-  let resetArmed = false;
+  let resetArmed = false, shareOpen = false, wasBothSeated = false;
 
   // ---------- helpers ----------
   function toast(msg, ms = 2200) {
@@ -346,7 +347,10 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; 
     $("btn-reset").hidden = !(seated && !state.over && state.moves > 0);
     if (!$("btn-reset").hidden && !resetArmed) $("btn-reset").textContent = "Reset board";
     $("btn-invite").hidden = !(mode === "online" && bothSeated);
-    if (mode === "online" && !bothSeated) $("share").hidden = false;
+    if (bothSeated && !wasBothSeated) shareOpen = false;          // opponent arrived: tuck the invite away
+    wasBothSeated = !!bothSeated;
+    $("share").hidden = !(mode === "online" && (shareOpen || !bothSeated));
+    $("btn-invite").textContent = shareOpen ? "Hide invite link" : "Show invite link";
   }
 
   // ---------- event log ----------
@@ -451,7 +455,7 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; 
     log = []; seen = new Set(); clearPending();
     ingest({ id: "l-h1", time: 0, t: "hello", pid: "p1" }); ingest({ id: "l-h2", time: 1, t: "hello", pid: "p2" });
     setConn("idle", "Pass & play");
-    $("share").hidden = true; show("game"); render();
+    shareOpen = false; show("game"); render();
     if (location.hash !== "#LOCAL") history.replaceState(null, "", "#LOCAL");
   }
 
@@ -466,7 +470,7 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; 
     $("share-link").textContent = link;
     $("qr").innerHTML = "";
     try { new QRCode($("qr"), { text: link, width: 168, height: 168, colorDark: "#15213b", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M }); } catch {}
-    $("share").hidden = !isCreator;
+    shareOpen = isCreator; wasBothSeated = false;
     show("game"); render();
     hello();
     if (location.hash !== "#" + code) history.replaceState(null, "", "#" + code);
@@ -505,7 +509,7 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; 
     resetArmed = false;
     if (mode === "local") ingest({ id: "l" + String(log.length).padStart(4, "0"), time: log.length, t: "reset", pid: "p1", g: state.gameIndex }); else publish({ t: "reset", pid, g: state.gameIndex });
   });
-  $("btn-invite").addEventListener("click", () => { $("share").hidden = !$("share").hidden; });
+  $("btn-invite").addEventListener("click", () => { shareOpen = !shareOpen; render(); });
   $("btn-share").addEventListener("click", async () => {
     const url = roomLink(room);
     if (navigator.share) { try { await navigator.share({ title: "Connect Four", text: "Play me in Connect Four", url }); } catch {} }
